@@ -1,0 +1,41 @@
+name: Extract Liiga data
+
+on:
+  workflow_dispatch:
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run extraction
+        env:
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+        run: |
+          python scripts/hockey/extract_hky_nhl_rsl.py
+
+      - name: Check output
+        run: |
+          ls -lh data/hockey/
+          test -f data/hockey/Hockey_results_Liiga_2025-2026_test_github.csv
+
+      - name: Upload CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: hockey-nhl-results
+          path: data/hockey/Hockey_results_Liiga_2025-2026_test_github.csv
+          retention-days: 30

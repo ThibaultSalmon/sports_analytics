@@ -188,7 +188,7 @@ try:
         # ----------------------------------------------------
 
         cursor.execute("""
-            INSERT INTO raw."test_HKY_NHL_RSL" (
+            INSERT INTO raw."HKY_NHL_RSL" (
                 "League",
                 "Season",
                 "Date",
@@ -273,7 +273,7 @@ try:
 
         print(
             f"{cursor.rowcount} lignes insérées dans "
-            f'raw."test_HKY_NHL_RSL"'
+            f'raw."HKY_NHL_RSL"'
         )
 
     # --------------------------------------------------------
