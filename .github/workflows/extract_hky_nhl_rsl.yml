@@ -31,11 +31,11 @@ jobs:
       - name: Check output
         run: |
           ls -lh data/hockey/
-          test -f data/hockey/Hockey_results_Liiga_2025-2026_test_github.csv
+          test -f data/hockey/Hockey_results_Liiga_2025-2026_test.csv
 
       - name: Upload CSV
         uses: actions/upload-artifact@v4
         with:
           name: hockey-nhl-results
-          path: data/hockey/Hockey_results_Liiga_2025-2026_test_github.csv
+          path: data/hockey/Hockey_results_Liiga_2025-2026_test.csv
           retention-days: 30
