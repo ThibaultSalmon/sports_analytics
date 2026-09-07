@@ -14,7 +14,7 @@ MATCH_IDS = [
 
 API_KEY = os.getenv("RAPIDAPI_KEY")
 
-CSV_FILENAME = "data/raw/Hockey_results_Liiga_2025-2026_test.csv"
+CSV_FILENAME = "data/hockey/Hockey_results_Liiga_2025-2026_test.csv"
 
 if not API_KEY:
     raise ValueError("La variable d'environnement RAPIDAPI_KEY n'est pas définie.")
