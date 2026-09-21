@@ -1,5 +1,6 @@
 import os
 import csv
+import io
 import time
 import requests
 
@@ -14,10 +15,43 @@ MATCH_IDS = [
 
 API_KEY = os.getenv("RAPIDAPI_KEY")
 
-CSV_FILENAME = "data/hockey/Hockey_results_Liiga_2025-2026_test.csv"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET")
+
+# Chemin uniquement dans Supabase Storage
+SUPABASE_FILE_PATH = (
+    "hockey/Hockey_results_Liiga_2025-2026_test_v2.csv"
+)
+
+
+# ==========================================
+# Vérification configuration
+# ==========================================
 
 if not API_KEY:
-    raise ValueError("La variable d'environnement RAPIDAPI_KEY n'est pas définie.")
+    raise ValueError(
+        "La variable d'environnement RAPIDAPI_KEY "
+        "n'est pas définie."
+    )
+
+if not SUPABASE_URL:
+    raise ValueError(
+        "La variable d'environnement SUPABASE_URL "
+        "n'est pas définie."
+    )
+
+if not SUPABASE_SERVICE_ROLE_KEY:
+    raise ValueError(
+        "La variable d'environnement "
+        "SUPABASE_SERVICE_ROLE_KEY n'est pas définie."
+    )
+
+if not SUPABASE_BUCKET:
+    raise ValueError(
+        "La variable d'environnement SUPABASE_BUCKET "
+        "n'est pas définie."
+    )
 
 
 # ==========================================
@@ -26,7 +60,10 @@ if not API_KEY:
 
 def get_match_data(match_id, api_key):
 
-    url = "https://flashscore4.p.rapidapi.com/api/flashscore/v2/matches/details"
+    url = (
+        "https://flashscore4.p.rapidapi.com/"
+        "api/flashscore/v2/matches/details"
+    )
 
     headers = {
         "x-rapidapi-key": api_key,
@@ -38,6 +75,7 @@ def get_match_data(match_id, api_key):
     }
 
     try:
+
         response = requests.get(
             url,
             headers=headers,
@@ -46,15 +84,35 @@ def get_match_data(match_id, api_key):
         )
 
         if response.status_code != 200:
-            print(f"❌ Erreur {match_id}: {response.status_code}")
+
+            print(
+                f"❌ Erreur API pour le match {match_id}: "
+                f"{response.status_code}"
+            )
+
             print(response.text)
-            return None
+
+            # On lève une exception pour arrêter
+            # complètement le processus
+            raise Exception(
+                f"Erreur API pour {match_id}: "
+                f"HTTP {response.status_code}"
+            )
 
         return response.json()
 
     except requests.RequestException as e:
-        print(f"❌ Exception {match_id}: {e}")
-        return None
+
+        print(
+            f"❌ Exception lors de la requête "
+            f"pour {match_id}: {e}"
+        )
+
+        # On arrête complètement le processus
+        raise Exception(
+            f"Impossible de récupérer les données "
+            f"du match {match_id}"
+        ) from e
 
 
 # ==========================================
@@ -64,9 +122,16 @@ def get_match_data(match_id, api_key):
 def extract_match_info(data):
 
     if not data:
-        return None
+        raise ValueError(
+            "Les données du match sont vides."
+        )
 
     match = data.get("data", data)
+
+    if not match:
+        raise ValueError(
+            "Aucune donnée de match trouvée."
+        )
 
     scores = match.get("scores", {})
     venue = match.get("venue", {})
@@ -74,8 +139,15 @@ def extract_match_info(data):
     home_team = match.get("home_team", {})
     away_team = match.get("away_team", {})
 
+    match_id = match.get("match_id")
+
+    if not match_id:
+        raise ValueError(
+            "Le match_id est absent de la réponse API."
+        )
+
     return [
-        match.get("match_id"),
+        match_id,
         tournament.get("name"),
         match.get("referee"),
         venue.get("name"),
@@ -101,12 +173,14 @@ def extract_match_info(data):
 
 
 # ==========================================
-# Création du CSV
+# Création du CSV en mémoire
 # ==========================================
 
-def main():
+def create_csv():
 
-    os.makedirs(os.path.dirname(CSV_FILENAME), exist_ok=True)
+    output = io.StringIO()
+
+    writer = csv.writer(output)
 
     headers = [
         "match_id",
@@ -133,37 +207,133 @@ def main():
         "away_penalties"
     ]
 
-    with open(
-        CSV_FILENAME,
-        mode="w",
-        newline="",
-        encoding="utf-8"
-    ) as csv_file:
+    writer.writerow(headers)
 
-        writer = csv.writer(csv_file)
+    for match_id in MATCH_IDS:
 
-        writer.writerow(headers)
+        print(
+            f"🔎 Récupération : {match_id}"
+        )
 
-        for match_id in MATCH_IDS:
+        # Si une erreur survient ici,
+        # create_csv() s'arrête immédiatement
+        data = get_match_data(
+            match_id,
+            API_KEY
+        )
 
-            print(f"🔎 Récupération : {match_id}")
+        row = extract_match_info(data)
 
-            data = get_match_data(match_id, API_KEY)
+        writer.writerow(row)
 
-            row = extract_match_info(data)
+        print(
+            f"✅ Match {match_id} enregistré"
+        )
 
-            if row:
-                writer.writerow(row)
-                print(f"✅ Match {match_id} enregistré")
-            else:
-                print(f"⚠️ Aucun résultat pour {match_id}")
+        time.sleep(1)
 
-            # Éviter les limites de l'API
-            time.sleep(1)
+    print(
+        f"✅ {len(MATCH_IDS)} match(s) récupéré(s) "
+        "avec succès."
+    )
 
-    print(f"✅ Extraction terminée : {CSV_FILENAME}")
+    return output.getvalue()
+
+
+# ==========================================
+# Upload vers Supabase
+# ==========================================
+
+def upload_to_supabase(csv_content):
+
+    url = (
+        f"{SUPABASE_URL}/storage/v1/object/"
+        f"{SUPABASE_BUCKET}/{SUPABASE_FILE_PATH}"
+    )
+
+    headers = {
+        "Authorization": (
+            f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"
+        ),
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Content-Type": "text/csv",
+        "x-upsert": "true"
+    }
+
+    response = requests.post(
+        url,
+        headers=headers,
+        data=csv_content.encode("utf-8")
+    )
+
+    if response.status_code not in [200, 201]:
+
+        print(
+            "❌ Erreur lors de l'upload Supabase"
+        )
+
+        print(
+            response.status_code
+        )
+
+        print(
+            response.text
+        )
+
+        raise Exception(
+            "Upload Supabase échoué."
+        )
+
+    print(
+        "☁️ Fichier envoyé dans Supabase : "
+        f"{SUPABASE_BUCKET}/"
+        f"{SUPABASE_FILE_PATH}"
+    )
+
+
+# ==========================================
+# Programme principal
+# ==========================================
+
+def main():
+
+    try:
+
+        # --------------------------------------
+        # 1. Extraction
+        # --------------------------------------
+        # Si une seule requête échoue,
+        # cette fonction lève une exception.
+        csv_content = create_csv()
+
+        # --------------------------------------
+        # 2. Upload
+        # --------------------------------------
+        # On n'arrive ici QUE si toutes les
+        # requêtes API ont réussi.
+        upload_to_supabase(csv_content)
+
+        print(
+            "✅ Extraction et upload terminés."
+        )
+
+    except Exception as e:
+
+        print(
+            "\n❌ PROCESSUS ARRÊTÉ"
+        )
+
+        print(
+            f"Erreur : {e}"
+        )
+
+        print(
+            "⚠️ Aucun fichier n'a été envoyé "
+            "dans Supabase."
+        )
+
+        raise
 
 
 if __name__ == "__main__":
     main()
-
