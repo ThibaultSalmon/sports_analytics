@@ -33,7 +33,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
         run: |
-          python scripts/hockey/extract_supabase.py
+          python scripts/hockey/extract_hky_nhl_rsl.py
 
       # 5. Fin du workflow
       - name: Extraction completed
